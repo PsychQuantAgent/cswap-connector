@@ -8,6 +8,11 @@
 #   1. $CSWAP_CONNECTOR_BIN (development override, e.g. a local `swift build`)
 #   2. ${CLAUDE_PLUGIN_DATA}/bin/cswap-connector, downloaded from the GitHub
 #      Release matching this plugin's version and checked against its .sha256
+#
+# The binary is about 11 MB; one measured download took 8.7 s, longer than the
+# 8 s SessionStart hook budget. So hooks never download in the foreground:
+# they start a background install and fail open for that session. The MCP
+# server, which may wait, installs in the foreground.
 
 SUB="${1:-}"
 REPO="PsychQuantAgent/cswap-connector"
@@ -33,30 +38,55 @@ VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$RO
 BIN_DIR="$DATA/bin"
 BIN="$BIN_DIR/cswap-connector"
 STAMP="$BIN_DIR/version"
-
 FAILED="$BIN_DIR/last-download-failure"
+LOCK="$BIN_DIR/install.lock"
 
-if [ ! -x "$BIN" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$VERSION" ]; then
-  # pending-hint runs before every prompt and has nothing to deliver until
-  # stop-failure (which needs the binary) has run, so it never downloads.
-  [ "$SUB" = "pending-hint" ] && exit 0
-  mkdir -p "$BIN_DIR" || fail "cannot create $BIN_DIR"
-  # After a failed download, wait 15 minutes before trying again.
-  if [ -f "$FAILED" ] && [ $(( $(date +%s) - $(cat "$FAILED" 2>/dev/null || echo 0) )) -lt 900 ]; then
-    fail "binary not installed yet (download retry in under 15 min)"
+installed() {
+  [ -x "$BIN" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$VERSION" ]
+}
+
+# Downloads and verifies the release binary. Returns non-zero on failure.
+install() {
+  mkdir -p "$BIN_DIR" || return 1
+  # One installer at a time; a lock older than 10 minutes is considered stale.
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    find "$LOCK" -maxdepth 0 -mmin +10 -exec rmdir {} \; 2>/dev/null
+    mkdir "$LOCK" 2>/dev/null || return 1
   fi
   BASE="https://github.com/$REPO/releases/download/v$VERSION"
-  TMP=$(mktemp "$BIN_DIR/download.XXXXXX") || fail "cannot create a temporary file"
-  if ! curl -fsL --max-time 6 "$BASE/cswap-connector" -o "$TMP"; then
-    rm -f "$TMP"; date +%s > "$FAILED"; fail "could not download the v$VERSION binary"
+  TMP=$(mktemp "$BIN_DIR/download.XXXXXX") || { rmdir "$LOCK"; return 1; }
+  if curl -fsL --max-time 120 "$BASE/cswap-connector" -o "$TMP" \
+     && EXPECTED=$(curl -fsL --max-time 20 "$BASE/cswap-connector.sha256" | awk '{print $1}') \
+     && [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$(shasum -a 256 "$TMP" | awk '{print $1}')" ] \
+     && chmod 755 "$TMP" && mv -f "$TMP" "$BIN" && printf '%s\n' "$VERSION" > "$STAMP"; then
+    rm -f "$FAILED"; rmdir "$LOCK"; return 0
   fi
-  EXPECTED=$(curl -fsL --max-time 3 "$BASE/cswap-connector.sha256" | awk '{print $1}')
-  ACTUAL=$(shasum -a 256 "$TMP" | awk '{print $1}')
-  if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
-    rm -f "$TMP"; date +%s > "$FAILED"; fail "checksum mismatch for the v$VERSION binary"
-  fi
-  chmod 755 "$TMP" && mv -f "$TMP" "$BIN" && printf '%s\n' "$VERSION" > "$STAMP" || fail "cannot install the binary"
-  rm -f "$FAILED"
+  rm -f "$TMP"; date +%s > "$FAILED"; rmdir "$LOCK"; return 1
+}
+
+recently_failed() {
+  [ -f "$FAILED" ] && [ $(( $(date +%s) - $(cat "$FAILED" 2>/dev/null || echo 0) )) -lt 900 ]
+}
+
+if [ "$SUB" = "__install" ]; then
+  install
+  exit 0
+fi
+
+if ! installed; then
+  case "$SUB" in
+    pending-hint)
+      # Runs before every prompt; nothing to deliver until stop-failure (which
+      # needs the binary) has run.
+      exit 0 ;;
+    mcp)
+      recently_failed && fail "binary download failed recently; retry in under 15 min"
+      install || fail "could not install the v$VERSION binary" ;;
+    *)
+      recently_failed && fail "binary download failed recently; retry in under 15 min"
+      [ -d "$LOCK" ] || nohup "$0" __install >/dev/null 2>&1 &
+      fail "installing the v$VERSION binary in the background; account usage appears from the next session" ;;
+  esac
 fi
 
 exec "$BIN" "$@"

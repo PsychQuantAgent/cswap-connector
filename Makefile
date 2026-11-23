@@ -32,4 +32,4 @@ checksum:
 	cd dist && shasum -a 256 $(NAME) > $(NAME).sha256 && cat $(NAME).sha256
 
 release-signed: test notarize checksum
-	spctl --assess --type execute --verbose dist/$(NAME) || true
+	spctl --assess --type install -vv dist/$(NAME)
