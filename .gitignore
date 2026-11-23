@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# session-local working state (Claude Code hooks/tools)
+.remember/
+.spectra/
+openspec/.vector-search.db*
+
+# IDD per-machine working state
+.claude/.idd/

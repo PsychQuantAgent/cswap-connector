@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cswap-connector",
+  "description": "cswap-connector — Claude Code plugin marketplace for the claude-swap (cswap) connector.",
+  "owner": {
+    "name": "Che Cheng"
+  },
+  "homepage": "https://github.com/PsychQuantAgent/cswap-connector",
+  "plugins": [
+    {
+      "name": "cswap-connector",
+      "version": "0.1.0",
+      "description": "Shows claude-swap (cswap) account usage to Claude at session start and proposes account switches — read-only, propose-only. Requires cswap.",
+      "author": {
+        "name": "Che Cheng"
+      },
+      "source": "./plugins/cswap-connector",
+      "category": "development"
+    }
+  ]
+}
