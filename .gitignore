@@ -9,3 +9,8 @@ openspec/.vector-search.db*
 
 # IDD per-machine working state
 .claude/.idd/
+
+# SwiftPM
+.build/
+.swiftpm/
+dist/

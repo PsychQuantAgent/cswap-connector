@@ -8,10 +8,14 @@ Shows [claude-swap](https://github.com/realiti4/claude-swap) (`cswap`) account u
 
 | Component | Type | Status |
 |-----------|------|--------|
-| `/cswap-connector:cswap-switch` | skill | skeleton |
-| SessionStart usage injection (`cswap list --json`) | hook | planned |
-| StopFailure rate-limit hint (`cswap auto --once --dry-run --json`) | hook | planned |
-| `schemaVersion` guard (cswap JSON contract v1) | shared check | planned |
+| `/cswap-connector:cswap-switch` | skill | done |
+| SessionStart usage injection (`session-context`, `cswap list --json`) | hook | done |
+| StopFailure rate-limit proposal (`stop-failure`, `cswap auto --once --dry-run --json`; one notification per session) | hook | done |
+| UserPromptSubmit delivery of the proposal (`pending-hint`; never calls cswap) | hook | done |
+| MCP server `cswap` with `cswap_usage` and `cswap_switch_preview` (no switch tool) | mcp | done |
+| `schemaVersion` guard, 5 s timeout, fail-open messages (`Reader`) | shared | done |
+
+All four entry points are subcommands of one Swift binary (`Sources/`), reached through `bin/cswap-connector-wrapper.sh`, which downloads the release binary for the plugin version into `${CLAUDE_PLUGIN_DATA}/bin`. Set `CSWAP_CONNECTOR_BIN` to a local build to bypass the download.
 
 ## Boundaries
 
@@ -23,6 +27,8 @@ Shows [claude-swap](https://github.com/realiti4/claude-swap) (`cswap`) account u
 ## Development
 
 - Plugin structure: see [official plugin-dev](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/plugin-dev)
-- Local test: `claude --plugin-dir ./plugins/cswap-connector`
+- Tests: `swift test` at the repo root (Swift Testing; includes stdio MCP tests against the built binary)
+- Local test: `CSWAP_CONNECTOR_BIN=$PWD/.build/debug/cswap-connector claude --plugin-dir ./plugins/cswap-connector`
+- Release: `make release-signed DEVELOPER_ID=<sha1>`, then `gh release create v<version> dist/cswap-connector dist/cswap-connector.sha256`; the tag must match `plugin.json`
 - Update after changes: `/harness-devtools:plugin-update cswap-connector`
 - Health check: `/harness-devtools:plugin-health`

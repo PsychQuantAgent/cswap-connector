@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "cswap-connector",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "Shows claude-swap (cswap) account usage to Claude at session start and proposes account switches — read-only, propose-only. Requires cswap.",
       "author": {
         "name": "Che Cheng"

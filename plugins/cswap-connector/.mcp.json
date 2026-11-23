@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cswap": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/cswap-connector-wrapper.sh",
+      "args": ["mcp"]
+    }
+  }
+}
